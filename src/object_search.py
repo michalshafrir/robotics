@@ -158,7 +158,7 @@ class ObjectSearch:
   #-----------------------------------------------------------------------------
   # Run!
   def run(self):
-
+  	
     # Just sit there doing nothing
     while True:
       rospy.sleep(0.1)
