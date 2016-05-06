@@ -63,6 +63,21 @@ class ObjectSearch:
     self.goalPoses.append((  2.0,  2.4, -3.0))
     self.goalPoses.append((  4.5,  0.7, -0.8))    
 
+    ############New additions to code:#####################
+    # Publisher to manually control the robot (e.g. to stop it)
+    self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist)
+        
+    # Subscribe to the move_base action server, makes client
+    self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
+    rospy.loginfo("Waiting for move_base action server...")
+        
+    # Wait 60 seconds for the action server to become available
+    self.move_base.wait_for_server(rospy.Duration(60))
+    rospy.loginfo("Connected to move base server")
+
+    #for setting up goal things:
+    self.goal = MoveBaseGoal()
+
   #-------------------------------------------------------------------------------
   # Draw matches between a training image and test image
   #  img1,img2 - RGB images
@@ -158,9 +173,25 @@ class ObjectSearch:
   #-----------------------------------------------------------------------------
   # Run!
   def run(self):
-  	
     # Just sit there doing nothing
     while True:
+      client = self.move_base
+   	  goal = self.goal
+   	  for target in self.goalPoses:
+   	  	(x,y,z) = target
+
+		goal.target_pose.header.frame_id = 'base_link'
+		goal.target_pose.pose = target
+		self.goal.target_pose.header.stamp = rospy.Time.now()
+		# Let the user know where the robot is going next
+        rospy.loginfo("Going to: " + target)
+
+		#send the goal and wait for the base to get there
+		client.send_goal_and_wait(goal)
+		# Waits for the server to finish performing the action.
+	    client.wait_for_result()
+	    #############then do things ???once at goal???
+
       rospy.sleep(0.1)
 
 #-------------------------------------------------------------------------------
