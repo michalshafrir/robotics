@@ -9,7 +9,7 @@ from tf.transformations import quaternion_from_euler
 from tf.transformations import euler_from_quaternion
 from tf.transformations import quaternion_multiply
 from tf.transformations import quaternion_inverse
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist,Quaternion,Pose,Point,PoseWithCovarianceStamped
 import math
 import cv2
 from sensor_msgs.msg import CompressedImage
@@ -177,19 +177,27 @@ class ObjectSearch:
     while True:
       client = self.move_base
    	  goal = self.goal
+   	  init_pose = PoseWithCovarianceStamped()
+      rospy.loginfo("*** Click the 2D Pose Estimate button in RViz to set the robot's initial pose...")
+      rospy.wait_for_message('initialpose', PoseWithCovarianceStamped)
+      rospy.Subscriber('initialpose', PoseWithCovarianceStamped, self.update_initial_pose)
+		
    	  for target in self.goalPoses:
    	  	(x,y,z) = target
-
-		goal.target_pose.header.frame_id = 'base_link'
-		goal.target_pose.pose = target
+   	  	position = Point(x,y,0)
+   	  	q = quaternion_from_euler(0,0,z)
+   	  	quat = Quaternion(*q)
+   	  	pose = Pose(position,quat)
+		goal.target_pose.header.frame_id = 'map'
+		goal.target_pose.pose = pose
+		print goal.target_pose.pose
 		self.goal.target_pose.header.stamp = rospy.Time.now()
 		# Let the user know where the robot is going next
         rospy.loginfo("Going to: " + target)
-
-		#send the goal and wait for the base to get there
-		client.send_goal_and_wait(goal)
+        #send the goal and wait for the base to get there
+		client.send_goal(goal)
 		# Waits for the server to finish performing the action.
-	    client.wait_for_result()
+	    client.wait_for_result(rospy.Duration(300))
 	    #############then do things ???once at goal???
 
       rospy.sleep(0.1)
