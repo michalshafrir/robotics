@@ -206,6 +206,41 @@ class ObjectSearch:
 
     self.lock.release() 
 
+  #-----------------------------------------------------------------------------
+  # Image callback
+  def imageProcess(self, cv_img_name):
+
+    cv_img = cv2.imread(cv_img_name,0)
+    cv_img_color = cv2.imread(cv_img_name,1)    
+
+    # Capture image
+    #np_arr = np.fromstring(data.data, np.uint8)
+    #cv_img_color = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
+    #cv_img = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+
+    # Store it if required
+    self.lock.acquire()
+    if self.processImage:
+      print "Capturing image"
+      self.image = copy.deepcopy(cv_img_color)
+      self.processImage = False
+      for target_name in self.trainImageNames:
+        target_img = cv2.imread(self.trainImageDir + '/' + target_name+'.png',0)
+        vals = self.match_img(target_img,cv_img)
+        if (vals != None):
+          (kp1,kp2,good) = vals
+          print "Object found: "+target_name
+          target_image = cv2.imread(self.trainImageDir + '/' + target_name+'.png',1)
+          img3 = self.drawMatches( cv_img_color, kp1, target_img_color,kp2,good)
+          plt.imshow(img3, 'gray'),plt.show() 
+        else:
+          print "Object NOT found: "+target_name 
+
+    cv2.waitKey(1)
+
+    self.lock.release() 
+
+
   #-------------------------------------------------------------------------------
   # Capture image, display it and save it to the debug folder
   def  capture_image(self):
@@ -233,6 +268,8 @@ class ObjectSearch:
 
     # Just sit there doing nothing
     while True:
+      img_name = self.capture_image()
+      self.imageProcess(img_name)
       rospy.sleep(0.1)
 
 #-------------------------------------------------------------------------------
