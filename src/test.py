@@ -186,6 +186,11 @@ class ObjectSearch:
         cv_img_color = cv2.imread(self.trainImageDir + '/' + cv_name+'.png',1)
         target_img_color = cv2.imread(self.trainImageDir + '/' + target_name+'.png',1)
 
+        b,g,r = cv2.split(target_img_color)
+        target_img_color = cv2.merge([r,g,b])
+
+        b,g,r = cv2.split(cv_img_color)
+        cv_img_color = cv2.merge([r,g,b])
 #        cv2.imshow(target_name,target_image)
  #       cv2.waitKey(100)
         vals = self.match_img(target_img,cv_img)

@@ -181,7 +181,11 @@ class ObjectSearch:
 
     # Capture image
     np_arr = np.fromstring(data.data, np.uint8)
+
     cv_img_color = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
+    b,g,r = cv2.split(cv_img_color)
+    cv_img_color = cv2.merge([r,g,b])
+
     cv_img = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_GRAYSCALE)
 
     # Store it if required
@@ -196,7 +200,10 @@ class ObjectSearch:
         if (vals != None):
           (kp1,kp2,good) = vals
           print "Object found: "+target_name
-          target_image = cv2.imread(self.trainImageDir + '/' + target_name+'.png',1)
+          target_img_color = cv2.imread(self.trainImageDir + '/' + target_name+'.png',1)
+          b,g,r = cv2.split(target_img_color)
+          target_img_color = cv2.merge([r,g,b])
+
           img3 = self.drawMatches( cv_img_color, kp1, target_img_color,kp2,good)
           plt.imshow(img3, 'gray'),plt.show() 
         else:
@@ -211,7 +218,9 @@ class ObjectSearch:
   def imageProcess(self, cv_img_name):
 
     cv_img = cv2.imread(cv_img_name,0)
-    cv_img_color = cv2.imread(cv_img_name,1)    
+    cv_img_color = cv2.imread(cv_img_name,1) 
+    b,g,r = cv2.split(cv_img_color)
+    cv_img_color = cv2.merge([r,g,b])   
 
     # Capture image
     #np_arr = np.fromstring(data.data, np.uint8)
@@ -230,7 +239,10 @@ class ObjectSearch:
         if (vals != None):
           (kp1,kp2,good) = vals
           print "Object found: "+target_name
-          target_image = cv2.imread(self.trainImageDir + '/' + target_name+'.png',1)
+          target_img_color = cv2.imread(self.trainImageDir + '/' + target_name+'.png',1)
+          b,g,r = cv2.split(target_img_color)
+          target_img_color = cv2.merge([r,g,b])
+          
           img3 = self.drawMatches( cv_img_color, kp1, target_img_color,kp2,good)
           plt.imshow(img3, 'gray'),plt.show() 
         else:
