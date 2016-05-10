@@ -45,9 +45,9 @@ class ObjectSearch:
     self.lock = threading.Lock()
 
     rospack = rospkg.RosPack()
-    self.debugImageDir = rospack.get_path('assignment_5_completed') + "/images/debug"
-    self.trainImageDir = rospack.get_path('assignment_5_completed') + "/images/train"
-    self.trainImageNames = ['cereal', 'soup', 'pringles', 'kinect2', 'milk', 'straws', 'dressing']
+    # self.debugImageDir = rospack.get_path('assignment_5_completed') + "/images/debug"
+    # self.trainImageDir = rospack.get_path('assignment_5_completed') + "/images/train"
+    # self.trainImageNames = ['cereal', 'soup', 'pringles', 'kinect2', 'milk', 'straws', 'dressing']
 
     # Initialize node
     rospy.init_node('object_search')
@@ -65,7 +65,7 @@ class ObjectSearch:
 
     ############New additions to code:#####################
     # Publisher to manually control the robot (e.g. to stop it)
-    self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist)
+    # self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist)
         
     # Subscribe to the move_base action server, makes client
     self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
@@ -176,39 +176,33 @@ class ObjectSearch:
     # Just sit there doing nothing
     while True:
       client = self.move_base
-   	  goal = self.goal
-   	  init_pose = PoseWithCovarianceStamped()
-      rospy.loginfo("*** Click the 2D Pose Estimate button in RViz to set the robot's initial pose...")
-      rospy.wait_for_message('initialpose', PoseWithCovarianceStamped)
-      rospy.Subscriber('initialpose', PoseWithCovarianceStamped, self.update_initial_pose)
-	  goal.target_pose.header.frame_id = 'map'
-	  # goal.target_pose.pose.position.x = 1	
-	  # goal.target_pose.pose.orientation = 1
-	  # self.goal.target_pose.header.stamp = rospy.Time.now()
-	  # client.send_goal(goal)
-	  # client.wait_for_result(rospy.Duration(300))
+      goal = self.goal
+   	  # goal = twist()
+   	  # init_pose = tfListener.lookupTransform('/odom', '/base_footprint', rospy.Time(0))
 
-
-   	  for target in self.goalPoses:
+      # rospy.loginfo("*** Click the 2D Pose Estimate button in RViz to set the robot's initial pose...")
+      # rospy.wait_for_message('initialpose', PoseWithCovarianceStamped)
+      # rospy.Subscriber('initialpose', PoseWithCovarianceStamped, self.update_initial_pose)
+      goal.target_pose.header.frame_id = 'map'
+      for target in self.goalPoses:
    	  	(x,y,z) = target
    	  	# position = Point(x,y,0)
    	  	# q = quaternion_from_euler(0,0,z)
    	  	# quat = Quaternion(*q)
    	  	# pose = Pose(position,quat)
 		goal.target_pose.header.frame_id = 'map'
-		# goal.target_pose.pose = pose
-		goal.target_pose.position.x = x
-		goal.target_pose.position.y = y
-		goal.target_pose.orientation.w = z
+		# goal.target_pose.pose = target
+		goal.target_pose.pose.position.x = x
+		goal.target_pose.pose.position.y = y
+		goal.target_pose.pose.orientation.w = z
 
 		print goal.target_pose.pose
 		self.goal.target_pose.header.stamp = rospy.Time.now()
 		# Let the user know where the robot is going next
-        rospy.loginfo("Going to: " + target)
+        # rospy.loginfo("Going to: " + target)
         #send the goal and wait for the base to get there
 		client.send_goal(goal)
-		# Waits for the server to finish performing the action.
-	    client.wait_for_result()
+		client.wait_for_result()
 	    #############then do things ???once at goal???
 
       rospy.sleep(0.1)
