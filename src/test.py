@@ -51,22 +51,17 @@ class ObjectSearch:
     rospack = rospkg.RosPack()
     self.debugImageDir = rospack.get_path('assignment_5') + "/images/debug"
     self.trainImageDir = rospack.get_path('assignment_5') + "/images/train"
-    self.trainImageNames = ['cereal', 'soup', 'pringles', 'kinect2', 'milk', 'straws', 'dressing']
+    self.trainImageNames = ['cereal', 'soup', 'pringles', 'kinect2', 'milk', 'straws', 'dressing'] 
 
-    # Initialize node
-    rospy.init_node('object_search')
 
-    # Image subscriber and cv_bridge
-    self.imageTopic = "/camera/rgb/image_raw/compressed"
-    self.imageSub = rospy.Subscriber(self.imageTopic,CompressedImage,self.imageCallback)    
-    self.debugImageId  = 0
 
-    # Generate goal poses
-    self.goalPoses = []
-    self.goalPoses.append((  4.0,  2.6,  1.0))
-    self.goalPoses.append((  2.0,  2.4, -3.0))
-    self.goalPoses.append((  4.5,  0.7, -0.8))    
-
+  #-------------------------------------------------------------------------------
+  # Draw matches between a training image and test image
+  #  img1,img2 - RGB images
+  #  kp1,kp2 - Detected list of keypoints through any of the OpenCV keypoint 
+  #            detection algorithms
+  #  matches - A list of matches of corresponding keypoints through any
+  #            OpenCV keypoint matching algorithm
   def drawMatches(self, img1, kp1, img2, kp2, matches):
 
     # Create a new output image that concatenates the two images together
@@ -176,64 +171,34 @@ class ObjectSearch:
         return None;
 
   #-----------------------------------------------------------------------------
-  # Image callback
-  def imageCallback(self, data):
+  # Run!
+  def run(self):
+    for target_name in self.trainImageNames:
+      for cv_name in self.trainImageNames:
+        #print self.trainImageDir
+        #print self.trainImageDir + '/' + cv_name+'.png'
+        #print self.trainImageDir + '/' + target_name+'.png'
+        print cv_name + ',' + target_name
 
-    # Capture image
-    np_arr = np.fromstring(data.data, np.uint8)
-    cv_img_color = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
-    cv_img = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_GRAYSCALE)
-
-    # Store it if required
-    self.lock.acquire()
-    if self.processImage:
-      print "Capturing image"
-      self.image = copy.deepcopy(cv_img_color)
-      self.processImage = False
-      for target_name in self.trainImageNames:
+        cv_img = cv2.imread(self.trainImageDir + '/' + cv_name+'.png',0)
         target_img = cv2.imread(self.trainImageDir + '/' + target_name+'.png',0)
+
+        cv_img_color = cv2.imread(self.trainImageDir + '/' + cv_name+'.png',1)
+        target_img_color = cv2.imread(self.trainImageDir + '/' + target_name+'.png',1)
+
+#        cv2.imshow(target_name,target_image)
+ #       cv2.waitKey(100)
         vals = self.match_img(target_img,cv_img)
         if (vals != None):
           (kp1,kp2,good) = vals
           print "Object found: "+target_name
-          target_image = cv2.imread(self.trainImageDir + '/' + target_name+'.png',1)
           img3 = self.drawMatches( cv_img_color, kp1, target_img_color,kp2,good)
           plt.imshow(img3, 'gray'),plt.show() 
         else:
           print "Object NOT found: "+target_name 
 
-    cv2.waitKey(1)
+        #cv2.waitKey(1000)
 
-    self.lock.release() 
-
-  #-------------------------------------------------------------------------------
-  # Capture image, display it and save it to the debug folder
-  def  capture_image(self):
-
-    # First get the image to be processed
-    self.processImage = True
-    while (self.processImage):
-      rospy.sleep(0.01)
-
-    # Display image
-    self.lock.acquire()
-    cv2.imshow("Captured image", self.image)
-    self.lock.release()
-
-    # Save image
-    cv2.imwrite(self.debugImageDir+"/image_" + str(self.debugImageId) + ".png", self.image)
-    self.debugImageId += 1
-
-    return self.debugImageDir+"/image_" + str(self.debugImageId) + ".png"
-
-
-  #-----------------------------------------------------------------------------
-  # Run!
-  def run(self):
-
-    # Just sit there doing nothing
-    while True:
-      rospy.sleep(0.1)
 
 #-------------------------------------------------------------------------------
 # Main
