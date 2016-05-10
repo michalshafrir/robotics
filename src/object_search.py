@@ -18,7 +18,7 @@ import threading
 import copy
 import rospkg
 
-
+MIN_MATCH_COUNT = 10
 #-------------------------------------------------------------------------------
 # Object search class
 #-------------------------------------------------------------------------------
@@ -45,9 +45,9 @@ class ObjectSearch:
     self.lock = threading.Lock()
 
     rospack = rospkg.RosPack()
-    # self.debugImageDir = rospack.get_path('assignment_5_completed') + "/images/debug"
-    # self.trainImageDir = rospack.get_path('assignment_5_completed') + "/images/train"
-    # self.trainImageNames = ['cereal', 'soup', 'pringles', 'kinect2', 'milk', 'straws', 'dressing']
+    self.debugImageDir = rospack.get_path('assignment_5') + "/images/debug"
+    self.trainImageDir = rospack.get_path('assignment_5') + "/images/train"
+    self.trainImageNames = ['cereal', 'soup', 'pringles', 'kinect2', 'milk', 'straws', 'dressing']
 
     # Initialize node
     rospy.init_node('object_search')
@@ -64,10 +64,8 @@ class ObjectSearch:
     self.goalPoses.append((  4.5,  0.7, -0.8))    
 
     ############New additions to code:#####################
-    # Publisher to manually control the robot (e.g. to stop it)
-    # self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist)
-        
-    # Subscribe to the move_base action server, makes client
+   
+
     self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
     rospy.loginfo("Waiting for move_base action server...")
         
@@ -77,18 +75,16 @@ class ObjectSearch:
 
     #for setting up goal things:
     self.goal = MoveBaseGoal()
-
-  #-------------------------------------------------------------------------------
-  # Draw matches between a training image and test image
-  #  img1,img2 - RGB images
-  #  kp1,kp2 - Detected list of keypoints through any of the OpenCV keypoint 
-  #            detection algorithms
-  #  matches - A list of matches of corresponding keypoints through any
-  #            OpenCV keypoint matching algorithm
+#-------------------------------------
   def drawMatches(self, img1, kp1, img2, kp2, matches):
 
     # Create a new output image that concatenates the two images together
     # (a.k.a) a montage
+    #print img2 == None
+    #print img1 == None
+    #cv2.imshow('img2',img2)
+    #cv2.waitKey(0)
+
     rows1 = img1.shape[0]
     cols1 = img1.shape[1]
     rows2 = img2.shape[0]
@@ -130,26 +126,141 @@ class ObjectSearch:
     # Also return the image if you'd like a copy
     return out
 
+  #---------------------------
+  # OpenCV Matching algorithm
+  def match_img (self, img1, img2):
+    # img1 - box
+    # img2 - box in scene
+    # Initiate SIFT detector
+    sift = cv2.ORB()
+
+    # find the keypoints and descriptors with SIFT
+    kp1, des1 = sift.detectAndCompute(img1,None)
+    kp2, des2 = sift.detectAndCompute(img2,None)
+
+    FLANN_INDEX_KDTREE = 0
+    index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+    search_params = dict(checks = 50)
+
+    flann = cv2.FlannBasedMatcher(index_params, search_params)
+
+    #if(des1.type!=CV_32F):
+    #  des1.convertTo(des1, CV_32F)
+    
+
+    #if(des1.type!=CV_32F):
+    #  des2.convertTo(des2, CV_32F)
+    
+
+    matches = flann.knnMatch(np.asarray(des1,np.float32),np.asarray(des2,np.float32),k=2)
+
+    # store all the good matches as per Lowe's ratio test.
+    good = []
+    for m,n in matches:
+        if m.distance < 0.7*n.distance:
+            good.append(m)
+
+    if len(good)>MIN_MATCH_COUNT:
+        src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
+        dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
+
+        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
+        matchesMask = mask.ravel().tolist()
+
+        h,w = img1.shape
+        pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+        dst = cv2.perspectiveTransform(pts,M)
+
+        #img2 = cv2.polylines(img2,[np.int32(dst)],True,255,3, cv2.CV_AA)
+
+       # draw_params = dict(matchColor = (0,255,0), # draw matches in green color
+       #            singlePointColor = None,
+       #            matchesMask = matchesMask, # draw only inliers
+       #            flags = 2)
+
+        return (kp1,kp2,good);
+    else:
+        print "Not enough matches are found - %d/%d" % (len(good),MIN_MATCH_COUNT)
+        matchesMask = None
+        return None;
+
   #-----------------------------------------------------------------------------
   # Image callback
   def imageCallback(self, data):
 
     # Capture image
     np_arr = np.fromstring(data.data, np.uint8)
-    cv_image = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
+
+    cv_img_color = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
+    b,g,r = cv2.split(cv_img_color)
+    cv_img_color = cv2.merge([r,g,b])
+
+    cv_img = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_GRAYSCALE)
 
     # Store it if required
     self.lock.acquire()
     if self.processImage:
       print "Capturing image"
-      self.image = copy.deepcopy(cv_image)
+      self.image = copy.deepcopy(cv_img_color)
       self.processImage = False
+      for target_name in self.trainImageNames:
+        target_img = cv2.imread(self.trainImageDir + '/' + target_name+'.png',0)
+        vals = self.match_img(target_img,cv_img)
+        if (vals != None):
+          (kp1,kp2,good) = vals
+          print "Object found: "+target_name
+          target_img_color = cv2.imread(self.trainImageDir + '/' + target_name+'.png',1)
+          b,g,r = cv2.split(target_img_color)
+          target_img_color = cv2.merge([r,g,b])
 
-    # Show image
-    cv2.imshow("Image live feed", cv_image)
+          img3 = self.drawMatches( cv_img_color, kp1, target_img_color,kp2,good)
+          plt.imshow(img3, 'gray'),plt.show() 
+        else:
+          print "Object NOT found: "+target_name 
+
     cv2.waitKey(1)
 
-    self.lock.release()
+    self.lock.release() 
+
+  #-----------------------------------------------------------------------------
+  # Image callback
+  def imageProcess(self, cv_img_name):
+
+    cv_img = cv2.imread(cv_img_name,0)
+    cv_img_color = cv2.imread(cv_img_name,1) 
+    b,g,r = cv2.split(cv_img_color)
+    cv_img_color = cv2.merge([r,g,b])   
+
+    # Capture image
+    #np_arr = np.fromstring(data.data, np.uint8)
+    #cv_img_color = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
+    #cv_img = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+
+    # Store it if required
+    self.lock.acquire()
+    if self.processImage:
+      print "Capturing image"
+      self.image = copy.deepcopy(cv_img_color)
+      self.processImage = False
+      for target_name in self.trainImageNames:
+        target_img = cv2.imread(self.trainImageDir + '/' + target_name+'.png',0)
+        vals = self.match_img(target_img,cv_img)
+        if (vals != None):
+          (kp1,kp2,good) = vals
+          print "Object found: "+target_name
+          target_img_color = cv2.imread(self.trainImageDir + '/' + target_name+'.png',1)
+          b,g,r = cv2.split(target_img_color)
+          target_img_color = cv2.merge([r,g,b])
+          
+          img3 = self.drawMatches( cv_img_color, kp1, target_img_color,kp2,good)
+          plt.imshow(img3, 'gray'),plt.show() 
+        else:
+          print "Object NOT found: "+target_name 
+
+    cv2.waitKey(1)
+
+    self.lock.release() 
+
 
   #-------------------------------------------------------------------------------
   # Capture image, display it and save it to the debug folder
@@ -168,6 +279,9 @@ class ObjectSearch:
     # Save image
     cv2.imwrite(self.debugImageDir+"/image_" + str(self.debugImageId) + ".png", self.image)
     self.debugImageId += 1
+
+    return self.debugImageDir+"/image_" + str(self.debugImageId) + ".png"
+
 
 
   #-----------------------------------------------------------------------------
@@ -196,16 +310,20 @@ class ObjectSearch:
 		goal.target_pose.pose.position.y = y
 		goal.target_pose.pose.orientation.w = z
 
-		print goal.target_pose.pose
+		# print goal.target_pose.pose
 		self.goal.target_pose.header.stamp = rospy.Time.now()
 		# Let the user know where the robot is going next
         # rospy.loginfo("Going to: " + target)
         #send the goal and wait for the base to get there
 		client.send_goal(goal)
 		client.wait_for_result()
-	    #############then do things ???once at goal???
-
-      rospy.sleep(0.1)
+		for theta in range(360):
+			goal.target_pose.pose.orientation.w = theta + goal.target_pose.pose.orientation.w
+			client.send_goal(goal)
+			client.wait_for_result()
+			# img_name = self.capture_image()
+	  #     	self.imageProcess(img_name)
+      # rospy.sleep(0.1)
 
 #-------------------------------------------------------------------------------
 # Main
