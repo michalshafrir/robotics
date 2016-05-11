@@ -17,7 +17,6 @@ import numpy as np
 import threading
 import copy
 import rospkg
-from matplotlib import pyplot as plt
 
 MIN_MATCH_COUNT = 10
 #-------------------------------------------------------------------------------
@@ -42,7 +41,6 @@ class ObjectSearch:
 
     # Vision
     self.image = []
-    self.imageNames = []
     self.processImage = False
     self.lock = threading.Lock()
 
@@ -72,7 +70,7 @@ class ObjectSearch:
     rospy.loginfo("Waiting for move_base action server...")
         
     # Wait 60 seconds for the action server to become available
-    self.move_base.wait_for_server(rospy.Duration(60))
+    self.move_base.wait_for_server(rospy.Duration(5))
     rospy.loginfo("Connected to move base server")
 
     #for setting up goal things:
@@ -194,8 +192,8 @@ class ObjectSearch:
     np_arr = np.fromstring(data.data, np.uint8)
 
     cv_img_color = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
-   # b,g,r = cv2.split(cv_img_color)
-   # cv_img_color = cv2.merge([r,g,b])
+    b,g,r = cv2.split(cv_img_color)
+    cv_img_color = cv2.merge([r,g,b])
 
     cv_img = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_GRAYSCALE)
 
@@ -220,8 +218,6 @@ class ObjectSearch:
         else:
           print "Object NOT found: "+target_name 
 
-    cv2.imshow("Image live feed", cv_img_color)
-
     cv2.waitKey(1)
 
     self.lock.release() 
@@ -232,8 +228,8 @@ class ObjectSearch:
 
     cv_img = cv2.imread(cv_img_name,0)
     cv_img_color = cv2.imread(cv_img_name,1) 
-   # b,g,r = cv2.split(cv_img_color)
-   # cv_img_color = cv2.merge([r,g,b])   
+    b,g,r = cv2.split(cv_img_color)
+    cv_img_color = cv2.merge([r,g,b])   
 
     # Capture image
     #np_arr = np.fromstring(data.data, np.uint8)
@@ -253,8 +249,8 @@ class ObjectSearch:
           (kp1,kp2,good) = vals
           print "Object found: "+target_name
           target_img_color = cv2.imread(self.trainImageDir + '/' + target_name+'.png',1)
-          #b,g,r = cv2.split(target_img_color)
-          #target_img_color = cv2.merge([r,g,b])
+          b,g,r = cv2.split(target_img_color)
+          target_img_color = cv2.merge([r,g,b])
           
           img3 = self.drawMatches( cv_img_color, kp1, target_img_color,kp2,good)
           plt.imshow(img3, 'gray'),plt.show() 
@@ -283,7 +279,7 @@ class ObjectSearch:
     # Save image
     cv2.imwrite(self.debugImageDir+"/image_" + str(self.debugImageId) + ".png", self.image)
     self.debugImageId += 1
-    #self.imageNames.append(self.debugImageDir+"/image_" + str(self.debugImageId) + ".png")
+
     return self.debugImageDir+"/image_" + str(self.debugImageId) + ".png"
 
 
@@ -293,11 +289,20 @@ class ObjectSearch:
   def run(self):
     # Just sit there doing nothing
     while True:
+      print "running"
       client = self.move_base
       goal = self.goal
+   	  # goal = twist()
+   	  # init_pose = tfListener.lookupTransform('/odom', '/base_footprint', rospy.Time(0))
+
+      # rospy.loginfo("*** Click the 2D Pose Estimate button in RViz to set the robot's initial pose...")
+      # rospy.wait_for_message('initialpose', PoseWithCovarianceStamped)
+      # rospy.Subscriber('initialpose', PoseWithCovarianceStamped, self.update_initial_pose)
       goal.target_pose.header.frame_id = 'map'
+      i = 1
       for target in self.goalPoses:
    	  	(x,y,z) = target
+                print "going to target: "+str(target)
    	  	# position = Point(x,y,0)
    	  	# q = quaternion_from_euler(0,0,z)
    	  	# quat = Quaternion(*q)
@@ -308,24 +313,24 @@ class ObjectSearch:
 		goal.target_pose.pose.position.y = y
 		goal.target_pose.pose.orientation.w = z
 
+		# print goal.target_pose.pose
 		self.goal.target_pose.header.stamp = rospy.Time.now()
-
-        #send the goal and wait for the base to get there
+		# Let the user know where the robot is going next
+                # rospy.loginfo("Going to: " + target)
+                #send the goal and wait for the base to get there
+                print "sending goal "+str(i)
 		client.send_goal(goal)
 		client.wait_for_result()
-                angle_inc = math.pi/4
-		for theta in range(8):
-                  #self.capture_image()
-                  img_name = self.capture_image()
-                  self.imageProcess(img_name)
-                  q = quaternion_from_euler(0,0,(theta*angle_inc))
-                  goal.target_pose.pose.orientation.x = q[0]
-                  goal.target_pose.pose.orientation.y = q[1]
-                  goal.target_pose.pose.orientation.z = q[2]
-                  goal.target_pose.pose.orientation.w = q[3]
-                  client.send_goal(goal)
-                  client.wait_for_result()
-                  #print "spin to: "+str(q)+" complete"
+                print "result recieved! "+str(i)
+                i += 1
+		#for theta in range(360):
+			#goal.target_pose.pose.orientation.w = theta + goal.target_pose.pose.orientation.w
+			#client.send_goal(goal)
+			#client.wait_for_result()
+			# img_name = self.capture_image()
+	  #     	self.imageProcess(img_name)
+      # rospy.sleep(0.1)
+      
       break
 
 #-------------------------------------------------------------------------------
