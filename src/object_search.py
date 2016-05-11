@@ -12,6 +12,7 @@ from tf.transformations import quaternion_inverse
 from geometry_msgs.msg import Twist,Quaternion,Pose,Point,PoseWithCovarianceStamped
 import math
 import cv2
+import cv2 import xfeatures2d
 from sensor_msgs.msg import CompressedImage
 import numpy as np
 import threading
@@ -134,7 +135,9 @@ class ObjectSearch:
     # img1 - box
     # img2 - box in scene
     # Initiate SIFT detector
-    sift = cv2.ORB()
+
+    #sift = cv2.ORB()
+    sift = xfeatures2d.SIFT_create()
 
     # find the keypoints and descriptors with SIFT
     kp1, des1 = sift.detectAndCompute(img1,None)
