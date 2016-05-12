@@ -12,7 +12,7 @@ from tf.transformations import quaternion_inverse
 from geometry_msgs.msg import Twist,Quaternion,Pose,Point,PoseWithCovarianceStamped
 import math
 import cv2
-import cv2 import xfeatures2d
+from cv2 import xfeatures2d
 from sensor_msgs.msg import CompressedImage
 import numpy as np
 import threading

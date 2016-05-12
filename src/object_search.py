@@ -12,7 +12,7 @@ from tf.transformations import quaternion_inverse
 from geometry_msgs.msg import Twist,Quaternion,Pose,Point,PoseWithCovarianceStamped
 import math
 import cv2
-import cv2 import xfeatures2d
+from cv2 import xfeatures2d
 from sensor_msgs.msg import CompressedImage
 import numpy as np
 import threading
@@ -20,7 +20,7 @@ import copy
 import rospkg
 from matplotlib import pyplot as plt
 
-MIN_MATCH_COUNT = 10
+MIN_MATCH_COUNT = 33
 #-------------------------------------------------------------------------------
 # Object search class
 #-------------------------------------------------------------------------------
@@ -63,8 +63,9 @@ class ObjectSearch:
     # Generate goal poses
     self.goalPoses = []
     self.goalPoses.append((  4.0,  2.6,  1.0))
+    self.goalPoses.append((  4.5,  0.7, -0.8))
     self.goalPoses.append((  2.0,  2.4, -3.0))
-    self.goalPoses.append((  4.5,  0.7, -0.8))    
+       
 
     ############New additions to code:#####################
    
@@ -87,11 +88,15 @@ class ObjectSearch:
     #print img1 == None
     #cv2.imshow('img2',img2)
     #cv2.waitKey(0)
+    #temp = img1
+    #img1 = img2
+    #img2 = temp
 
     rows1 = img1.shape[0]
     cols1 = img1.shape[1]
     rows2 = img2.shape[0]
     cols2 = img2.shape[1]
+    
 
     out = np.zeros((max([rows1,rows2]),cols1+cols2,3), dtype='uint8')
 
@@ -157,7 +162,9 @@ class ObjectSearch:
     #  des2.convertTo(des2, CV_32F)
     
 
-    matches = flann.knnMatch(np.asarray(des1,np.float32),np.asarray(des2,np.float32),k=2)
+    #matches = flann.knnMatch(np.asarray(des1,np.float32),np.asarray(des2,np.float32),k=2)
+    bf = cv2.BFMatcher()
+    matches = bf.knnMatch(np.asarray(des1,np.float32),np.asarray(des2,np.float32),k=2)
 
     # store all the good matches as per Lowe's ratio test.
     good = []
@@ -166,24 +173,25 @@ class ObjectSearch:
             good.append(m)
 
     if len(good)>MIN_MATCH_COUNT:
-        src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
-        dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
+      print "Match number: " +str(len(good))
+      src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
+      dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
 
-        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
-        matchesMask = mask.ravel().tolist()
+      M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
+      matchesMask = mask.ravel().tolist()
 
-        h,w = img1.shape
-        pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
-        dst = cv2.perspectiveTransform(pts,M)
+      h,w = img1.shape
+      pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+      dst = cv2.perspectiveTransform(pts,M)
 
-        #img2 = cv2.polylines(img2,[np.int32(dst)],True,255,3, cv2.CV_AA)
+      #img2 = cv2.polylines(img2,[np.int32(dst)],True,255,3, cv2.CV_AA)
 
-       # draw_params = dict(matchColor = (0,255,0), # draw matches in green color
-       #            singlePointColor = None,
-       #            matchesMask = matchesMask, # draw only inliers
-       #            flags = 2)
+      # draw_params = dict(matchColor = (0,255,0), # draw matches in green color
+      #            singlePointColor = None,
+      #            matchesMask = matchesMask, # draw only inliers
+      #            flags = 2)
 
-        return (kp1,kp2,good);
+      return (kp1,kp2,good);
     else:
         print "Not enough matches are found - %d/%d" % (len(good),MIN_MATCH_COUNT)
         matchesMask = None
@@ -195,12 +203,12 @@ class ObjectSearch:
 
     # Capture image
     np_arr = np.fromstring(data.data, np.uint8)
-
-    cv_img_color = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
+    cv_img_color = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    #cv_img_color = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_COLOR)
    # b,g,r = cv2.split(cv_img_color)
    # cv_img_color = cv2.merge([r,g,b])
 
-    cv_img = cv2.imdecode(np_arr, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    cv_img = cv2.imdecode(np_arr, cv2.IMREAD_GRAYSCALE)
 
     # Store it if required
     self.lock.acquire()
@@ -218,7 +226,7 @@ class ObjectSearch:
           b,g,r = cv2.split(target_img_color)
           target_img_color = cv2.merge([r,g,b])
 
-          img3 = self.drawMatches( cv_img_color, kp1, target_img_color,kp2,good)
+          img3 = self.drawMatches( target_img_color, kp1, cv_img_color,kp2,good)
           plt.imshow(img3, 'gray'),plt.show() 
         else:
           print "Object NOT found: "+target_name 
@@ -280,7 +288,7 @@ class ObjectSearch:
 
     # Display image
     self.lock.acquire()
-    cv2.imshow("Captured image", self.image)
+    #cv2.imshow("Captured image", self.image)
     self.lock.release()
 
     # Save image
@@ -300,35 +308,31 @@ class ObjectSearch:
       goal = self.goal
       goal.target_pose.header.frame_id = 'map'
       for target in self.goalPoses:
-   	  	(x,y,z) = target
-   	  	# position = Point(x,y,0)
-   	  	# q = quaternion_from_euler(0,0,z)
-   	  	# quat = Quaternion(*q)
-   	  	# pose = Pose(position,quat)
-		goal.target_pose.header.frame_id = 'map'
-		# goal.target_pose.pose = target
-		goal.target_pose.pose.position.x = x
-		goal.target_pose.pose.position.y = y
-		goal.target_pose.pose.orientation.w = z
-
-		self.goal.target_pose.header.stamp = rospy.Time.now()
+        (x,y,z) = target
+        print target
+        goal.target_pose.header.frame_id = 'map'
+        # goal.target_pose.pose = target
+        goal.target_pose.pose.position.x = x
+        goal.target_pose.pose.position.y = y
+        goal.target_pose.pose.orientation.w = z
+        self.goal.target_pose.header.stamp = rospy.Time.now()
 
         #send the goal and wait for the base to get there
-		client.send_goal(goal)
-		client.wait_for_result()
-                angle_inc = math.pi/4
-		for theta in range(8):
-                  #self.capture_image()
-                  img_name = self.capture_image()
-                  self.imageProcess(img_name)
-                  q = quaternion_from_euler(0,0,(theta*angle_inc))
-                  goal.target_pose.pose.orientation.x = q[0]
-                  goal.target_pose.pose.orientation.y = q[1]
-                  goal.target_pose.pose.orientation.z = q[2]
-                  goal.target_pose.pose.orientation.w = q[3]
-                  client.send_goal(goal)
-                  client.wait_for_result()
-                  #print "spin to: "+str(q)+" complete"
+        client.send_goal(goal)
+        client.wait_for_result()
+        angle_inc = math.pi/4
+        for theta in range(8):
+          #self.capture_image()
+          img_name = self.capture_image()
+          self.imageProcess(img_name)
+          q = quaternion_from_euler(0,0,(theta*angle_inc))
+          goal.target_pose.pose.orientation.x = q[0]
+          goal.target_pose.pose.orientation.y = q[1]
+          goal.target_pose.pose.orientation.z = q[2]
+          goal.target_pose.pose.orientation.w = q[3]
+          client.send_goal(goal)
+          client.wait_for_result()
+          #print "spin to: "+str(q)+" complete"
       break
 
 #-------------------------------------------------------------------------------
